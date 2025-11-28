@@ -26,6 +26,9 @@ python-dotenv==1.0.0
 # Monitoring and logging
 prometheus-client==0.17.1
 
+# WSGI Server
+gunicorn==21.2.0
+
 # Testing (optional)
 pytest==7.4.2
 pytest-flask==1.2.0

@@ -1,0 +1,21 @@
+# Backup Service Requirements
+
+# AWS S3 and KMS
+boto3==1.34.0
+botocore==1.34.0
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
+
+# Environment
+python-dotenv==1.0.0
+
+# Monitoring
+prometheus-client==0.19.0
+
+# Scheduling
+schedule==1.2.0
+
+# HTTP requests
+requests==2.31.0

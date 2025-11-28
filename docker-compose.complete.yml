@@ -346,7 +346,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8080"  # Changed to 8081 to avoid conflict with odoo-service
     networks:
       - monitoring
     restart: unless-stopped
