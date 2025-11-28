@@ -1,0 +1,1 @@
+# Odoo custom addons directory

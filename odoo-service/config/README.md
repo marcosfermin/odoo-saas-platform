@@ -1,0 +1,1 @@
+# Odoo configuration directory

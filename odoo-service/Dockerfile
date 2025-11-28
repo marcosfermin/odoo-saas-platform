@@ -50,9 +50,8 @@ RUN chown -R odoo:odoo /opt/odoo/addons/custom
 RUN chown -R odoo:odoo /opt/odoo/tenant-service
 RUN chown -R odoo:odoo /var/lib/odoo
 
-# Make scripts executable
-RUN chmod +x /opt/odoo/multi-tenant/scripts/*.sh
-RUN chmod +x /opt/odoo/multi-tenant/scripts/*.py
+# Make scripts executable (if any exist)
+RUN find /opt/odoo/multi-tenant/scripts -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} \; 2>/dev/null || true
 
 # Create entrypoint script for multi-tenant setup
 COPY docker-entrypoint.sh /docker-entrypoint.sh
@@ -71,9 +70,6 @@ EXPOSE 8069 8071 8072
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8069/web/health || exit 1
 
-# Switch back to odoo user
-USER odoo
-
-# Set the entrypoint
+# Set the entrypoint (runs as root, then switches to odoo user if needed)
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["odoo"]

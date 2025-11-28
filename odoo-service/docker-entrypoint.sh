@@ -150,13 +150,20 @@ start_tenant_service
 # If first argument is 'odoo', run Odoo with our configuration
 if [ "$1" = 'odoo' ]; then
     echo "Starting Odoo with multi-tenant configuration..."
-    
-    # Ensure proper permissions
+
+    # Ensure proper permissions (we're running as root now)
     chown -R odoo:odoo "$ODOO_LOG_DIR"
     chown -R odoo:odoo "$ODOO_FILESTORE_DIR"
-    
-    # Start Odoo
-    exec /usr/bin/odoo -c "$ODOO_CONFIG_FILE" --logfile="$ODOO_LOG_DIR/odoo.log"
+    chown -R odoo:odoo "$ODOO_CONFIG_DIR"
+
+    # Start Odoo as odoo user using gosu
+    echo "Starting Odoo process as odoo user..."
+    if command -v gosu &> /dev/null; then
+        exec gosu odoo /usr/bin/odoo -c "$ODOO_CONFIG_FILE" --logfile="$ODOO_LOG_DIR/odoo.log"
+    else
+        # Fallback to su if gosu is not available
+        exec su -s /bin/bash odoo -c "/usr/bin/odoo -c $ODOO_CONFIG_FILE --logfile=$ODOO_LOG_DIR/odoo.log"
+    fi
 else
     # Run custom command
     exec "$@"
