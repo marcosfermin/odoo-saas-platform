@@ -11,15 +11,12 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY ../requirements.txt /app/requirements.txt
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Copy application code
-COPY . /app/admin/
-COPY app.py /app/
+COPY . /app/
+
+# Install Python dependencies (Flask and essential packages)
+RUN pip install --no-cache-dir Flask gunicorn Flask-SQLAlchemy Flask-JWT-Extended \
+    Flask-CORS psycopg2-binary python-dotenv prometheus-client structlog redis
 
 # Create logs directory
 RUN mkdir -p /app/logs

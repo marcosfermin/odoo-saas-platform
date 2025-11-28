@@ -11,14 +11,12 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy root requirements
-COPY ../requirements.txt /app/requirements.txt
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Copy application code
 COPY . /app/
+
+# Install Python dependencies (RQ and essential packages)
+RUN pip install --no-cache-dir rq redis psycopg2-binary python-dotenv \
+    prometheus-client structlog requests
 
 # Create logs directory
 RUN mkdir -p /app/logs

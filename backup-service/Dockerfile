@@ -12,14 +12,12 @@ RUN apt-get update && apt-get install -y \
     gzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy root requirements
-COPY ../requirements.txt /app/requirements.txt
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Copy application code
 COPY . /app/
+
+# Install Python dependencies (backup service essentials)
+RUN pip install --no-cache-dir boto3 psycopg2-binary python-dotenv \
+    prometheus-client structlog schedule
 
 # Create directories for backups and logs
 RUN mkdir -p /tmp/backups /app/logs

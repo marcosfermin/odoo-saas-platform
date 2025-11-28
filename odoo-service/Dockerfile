@@ -51,8 +51,8 @@ RUN chown -R odoo:odoo /opt/odoo/tenant-service
 RUN chown -R odoo:odoo /var/lib/odoo
 
 # Make scripts executable
-RUN chmod +x /opt/odoo/multi-tenant/scripts/*.sh
-RUN chmod +x /opt/odoo/multi-tenant/scripts/*.py
+RUN chmod +x /opt/odoo/multi-tenant/scripts/*.sh || true
+RUN find /opt/odoo/multi-tenant/scripts -name "*.py" -type f -exec chmod +x {} \; || true
 
 # Create entrypoint script for multi-tenant setup
 COPY docker-entrypoint.sh /docker-entrypoint.sh
