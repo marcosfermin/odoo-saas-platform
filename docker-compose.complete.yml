@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./config/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:15432:5432"
     networks:
       - backend
     healthcheck:
@@ -39,7 +39,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:16379:6379"
     networks:
       - backend
     healthcheck:
@@ -65,8 +65,8 @@ services:
     volumes:
       - admin_logs:/app/logs
     ports:
-      - "127.0.0.1:5000:5000"
-      - "127.0.0.1:9090:9090"  # Metrics
+      - "127.0.0.1:15000:5000"
+      - "127.0.0.1:19090:9090"  # Metrics
     networks:
       - frontend
       - backend
@@ -100,8 +100,8 @@ services:
     volumes:
       - portal_logs:/app/logs
     ports:
-      - "127.0.0.1:5001:5001"
-      - "127.0.0.1:9091:9090"  # Metrics
+      - "127.0.0.1:15001:5001"
+      - "127.0.0.1:19091:9090"  # Metrics
     networks:
       - frontend
       - backend
@@ -137,10 +137,10 @@ services:
       - odoo_logs:/opt/odoo/multi-tenant/logs
       - odoo_backups:/opt/odoo/multi-tenant/backups
     ports:
-      - "8069:8069"  # Odoo web interface
-      - "8071:8071"  # Metrics
-      - "8072:8072"  # Longpolling
-      - "8080:8080"  # Tenant management API
+      - "18069:8069"  # Odoo web interface
+      - "18071:8071"  # Metrics
+      - "18072:8072"  # Longpolling
+      - "18080:8080"  # Tenant management API
     networks:
       - frontend
       - backend
@@ -169,7 +169,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - ODOO_SERVICE_URL=http://odoo-service:8080
     ports:
-      - "127.0.0.1:9092:9091"  # Metrics
+      - "127.0.0.1:19092:9091"  # Metrics
     networks:
       - backend
     depends_on:
@@ -199,7 +199,7 @@ services:
     volumes:
       - backup_temp:/tmp/backups
     ports:
-      - "127.0.0.1:9093:9092"  # Metrics
+      - "127.0.0.1:19093:9092"  # Metrics
     networks:
       - backend
     depends_on:
@@ -216,8 +216,8 @@ services:
       - ./nginx/ssl:/etc/ssl/certs:ro
       - nginx_logs:/var/log/nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "10080:80"
+      - "10443:443"
     networks:
       - frontend
     depends_on:
@@ -242,7 +242,7 @@ services:
       - ./monitoring/prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus_data:/prometheus
     ports:
-      - "127.0.0.1:9090:9090"
+      - "127.0.0.1:19094:9090"
     networks:
       - monitoring
       - backend
@@ -261,7 +261,7 @@ services:
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:13000:3000"
     networks:
       - monitoring
       - frontend
@@ -281,7 +281,7 @@ services:
       - ./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro
       - alertmanager_data:/alertmanager
     ports:
-      - "127.0.0.1:9093:9093"
+      - "127.0.0.1:19095:9093"
     networks:
       - monitoring
     restart: unless-stopped
@@ -297,7 +297,7 @@ services:
     volumes:
       - '/:/host:ro,rslave'
     ports:
-      - "127.0.0.1:9100:9100"
+      - "127.0.0.1:19100:9100"
     networks:
       - monitoring
 
@@ -308,7 +308,7 @@ services:
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
     ports:
-      - "127.0.0.1:9187:9187"
+      - "127.0.0.1:19187:9187"
     networks:
       - monitoring
       - backend
@@ -324,7 +324,7 @@ services:
       REDIS_ADDR: "redis://redis:6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
-      - "127.0.0.1:9121:9121"
+      - "127.0.0.1:19121:9121"
     networks:
       - monitoring
       - backend
@@ -346,7 +346,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:18081:8080"
     networks:
       - monitoring
     restart: unless-stopped
