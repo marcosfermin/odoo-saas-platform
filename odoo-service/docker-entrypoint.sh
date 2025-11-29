@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -eo pipefail
 
 # Multi-tenant Odoo entrypoint script
 # Handles tenant-specific configuration and database setup

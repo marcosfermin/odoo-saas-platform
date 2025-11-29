@@ -181,8 +181,8 @@ services:
   # Backup Service
   backup-service:
     build:
-      context: ./backup-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backup-service/Dockerfile
     container_name: odoo-saas-backup
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}

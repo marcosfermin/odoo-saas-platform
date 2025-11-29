@@ -103,9 +103,3 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox-exporter:9115
-
-# Storage configuration
-storage:
-  tsdb:
-    retention.time: 30d
-    retention.size: 50GB
