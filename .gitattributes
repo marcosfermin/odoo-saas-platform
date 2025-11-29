@@ -1,0 +1,30 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force LF line endings for shell scripts
+*.sh text eol=lf
+
+# Force LF line endings for Docker-related files
+Dockerfile* text eol=lf
+docker-entrypoint* text eol=lf
+*.dockerfile text eol=lf
+
+# Force LF line endings for Python files
+*.py text eol=lf
+
+# Force LF line endings for configuration files
+*.conf text eol=lf
+*.ini text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
