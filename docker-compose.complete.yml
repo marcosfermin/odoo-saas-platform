@@ -169,7 +169,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - ODOO_SERVICE_URL=http://odoo-service:8080
     ports:
-      - "127.0.0.1:9092:9091"  # Metrics
+      - "127.0.0.1:9095:9091"  # Metrics
     networks:
       - backend
     depends_on:
@@ -199,7 +199,7 @@ services:
     volumes:
       - backup_temp:/tmp/backups
     ports:
-      - "127.0.0.1:9093:9092"  # Metrics
+      - "127.0.0.1:9094:9092"  # Metrics
     networks:
       - backend
     depends_on:
@@ -242,7 +242,7 @@ services:
       - ./monitoring/prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus_data:/prometheus
     ports:
-      - "127.0.0.1:9090:9090"
+      - "127.0.0.1:9092:9090"
     networks:
       - monitoring
       - backend
@@ -346,7 +346,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8080"
     networks:
       - monitoring
     restart: unless-stopped

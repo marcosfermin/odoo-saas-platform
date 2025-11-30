@@ -1,0 +1,50 @@
+# Alertmanager Configuration for Odoo SaaS Platform
+global:
+  resolve_timeout: 5m
+
+# The root route with all parameters
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default-receiver'
+
+  # Child routes for specific alerts
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical-receiver'
+      continue: true
+
+    - match:
+        severity: warning
+      receiver: 'warning-receiver'
+
+# Receivers configuration
+receivers:
+  - name: 'default-receiver'
+    # Default webhook receiver (can be configured later)
+    webhook_configs:
+      - url: 'http://localhost:5001/api/webhooks/alerts'
+        send_resolved: true
+
+  - name: 'critical-receiver'
+    # Critical alerts receiver
+    webhook_configs:
+      - url: 'http://localhost:5001/api/webhooks/alerts/critical'
+        send_resolved: true
+
+  - name: 'warning-receiver'
+    # Warning alerts receiver
+    webhook_configs:
+      - url: 'http://localhost:5001/api/webhooks/alerts/warning'
+        send_resolved: true
+
+# Inhibition rules
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
