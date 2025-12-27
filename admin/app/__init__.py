@@ -131,6 +131,7 @@ def get_config_class(config_name=None):
         TESTING = True
         DEBUG = True
         SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+        SQLALCHEMY_ENGINE_OPTIONS = {}  # SQLite doesn't support pool_size
         WTF_CSRF_ENABLED = False
         
     config_classes = {
@@ -272,12 +273,16 @@ def register_jwt_callbacks(app):
     def user_lookup_callback(_jwt_header, jwt_data):
         """Load user from JWT token identity"""
         identity = jwt_data["sub"]
-        return Customer.query.filter_by(id=identity).one_or_none()
+        return db.session.query(Customer).filter_by(id=identity).one_or_none()
     
     @jwt.additional_claims_loader
     def add_claims_to_jwt(identity):
         """Add custom claims to JWT token"""
-        user = Customer.query.filter_by(id=identity).one_or_none()
+        # Identity can be either a Customer object or a string ID
+        if isinstance(identity, Customer):
+            user = identity
+        else:
+            user = db.session.query(Customer).filter_by(id=identity).one_or_none()
         if user:
             return {
                 'role': user.role,

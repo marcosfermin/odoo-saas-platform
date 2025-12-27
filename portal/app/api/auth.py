@@ -35,7 +35,7 @@ class RegisterSchema(Schema):
 class LoginSchema(Schema):
     email = fields.Email(required=True)
     password = fields.Str(required=True)
-    remember_me = fields.Bool(missing=False)
+    remember_me = fields.Bool(load_default=False)
 
 class UpdateProfileSchema(Schema):
     first_name = fields.Str(validate=validate.Length(max=100))

@@ -12,13 +12,15 @@ import json
 import uuid
 
 from sqlalchemy import (
-    Column, String, Integer, DateTime, Boolean, Text, JSON, 
-    ForeignKey, Decimal, BigInteger, Index, UniqueConstraint,
+    Column, String, Integer, DateTime, Boolean, Text, JSON,
+    ForeignKey, Numeric, BigInteger, Index, UniqueConstraint,
     CheckConstraint, event
 )
+from decimal import Decimal
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, validates
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON as JSONB  # Use generic JSON for SQLite compatibility
 from werkzeug.security import generate_password_hash, check_password_hash
 
 Base = declarative_base()
@@ -165,8 +167,8 @@ class Plan(Base):
     description = Column(Text)
     
     # Pricing
-    price_monthly = Column(Decimal(10, 2))
-    price_yearly = Column(Decimal(10, 2))
+    price_monthly = Column(Numeric(10, 2))
+    price_yearly = Column(Numeric(10, 2))
     currency = Column(String(3), default='USD', nullable=False)
     
     # Quotas and limits
@@ -342,7 +344,7 @@ class AuditLog(Base):
     # Change details
     old_values = Column(JSONB)
     new_values = Column(JSONB)
-    metadata = Column(JSONB, default=dict)
+    extra_data = Column(JSONB, default=dict)  # Additional context data
     
     # Immutability protection
     payload_hash = Column(String(64), nullable=False)  # SHA-256 of serialized data
@@ -445,14 +447,14 @@ class Subscription(Base):
     ended_at = Column(DateTime)
     
     # Billing
-    amount = Column(Decimal(10, 2))
+    amount = Column(Numeric(10, 2))
     currency = Column(String(3), default='USD')
     interval = Column(String(20))  # month, year
-    
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     customer = relationship("Customer", back_populates="subscriptions")
     plan = relationship("Plan", back_populates="subscriptions")
@@ -478,7 +480,7 @@ class PaymentEvent(Base):
     event_type = Column(String(50), nullable=False)
     
     # Payment details
-    amount = Column(Decimal(10, 2))
+    amount = Column(Numeric(10, 2))
     currency = Column(String(3))
     status = Column(String(20))
     

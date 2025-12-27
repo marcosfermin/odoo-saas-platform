@@ -31,7 +31,7 @@ auth_bp = Blueprint('auth', __name__)
 class LoginSchema(Schema):
     email = fields.Email(required=True, validate=validate.Length(max=255))
     password = fields.Str(required=True, validate=validate.Length(min=1))
-    remember_me = fields.Bool(missing=False)
+    remember_me = fields.Bool(load_default=False)
 
 class RegisterSchema(Schema):
     email = fields.Email(required=True, validate=validate.Length(max=255))
@@ -69,7 +69,7 @@ def login():
         }), 400
     
     # Find user by email
-    user = Customer.query.filter_by(email=data['email'].lower()).first()
+    user = db.session.query(Customer).filter_by(email=data['email'].lower()).first()
     
     if not user or not user.check_password(data['password']):
         current_app.logger.warning(f"Failed login attempt for email: {data['email']}")

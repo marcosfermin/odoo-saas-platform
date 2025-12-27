@@ -22,14 +22,21 @@ os.environ['SECRET_KEY'] = 'test-secret-key-for-testing'
 def app():
     """Create application for testing"""
     from admin.app import create_app, db
+    from shared.models import Base, Customer, Tenant, Plan, AuditLog, Subscription
+    from flask_sqlalchemy.query import Query
 
     app = create_app('testing')
 
-    # Create tables
+    # Create tables using the shared models Base
     with app.app_context():
-        db.create_all()
+        Base.metadata.create_all(bind=db.engine)
+
+        # Patch models to add Flask-SQLAlchemy query support
+        for model in [Customer, Tenant, Plan, AuditLog, Subscription]:
+            model.query = db.session.query_property()
+
         yield app
-        db.drop_all()
+        Base.metadata.drop_all(bind=db.engine)
 
 
 @pytest.fixture(scope='function')
@@ -42,23 +49,18 @@ def client(app):
 def db_session(app):
     """Create database session for testing"""
     from admin.app import db
+    from shared.models import Base
 
     with app.app_context():
-        # Start a transaction
-        connection = db.engine.connect()
-        transaction = connection.begin()
+        # Clear all tables before each test
+        for table in reversed(Base.metadata.sorted_tables):
+            db.session.execute(table.delete())
+        db.session.commit()
 
-        # Bind session to connection
-        options = dict(bind=connection, binds={})
-        session = db.create_scoped_session(options=options)
-        db.session = session
+        yield db.session
 
-        yield session
-
-        # Rollback transaction
-        transaction.rollback()
-        connection.close()
-        session.remove()
+        # Rollback any uncommitted changes
+        db.session.rollback()
 
 
 @pytest.fixture

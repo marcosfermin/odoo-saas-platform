@@ -22,7 +22,7 @@ class TestAdminAuth:
         data = json.loads(response.data)
         assert 'access_token' in data
         assert 'refresh_token' in data
-        assert data['customer']['email'] == 'admin@example.com'
+        assert data['user']['email'] == 'admin@example.com'
 
     def test_login_invalid_credentials(self, client, admin_customer):
         """Test login with invalid credentials"""
