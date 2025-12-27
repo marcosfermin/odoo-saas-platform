@@ -249,32 +249,263 @@ def update_profile():
 
 @auth_bp.route('/verify-email', methods=['POST'])
 def verify_email():
-    """Verify email address"""
-    # TODO: Implement email verification with tokens
+    """Verify email address with token"""
+    import hashlib
+    import hmac
+
+    data = request.get_json() or {}
+    token = data.get('token')
+    email = data.get('email')
+
+    if not token or not email:
+        return jsonify({
+            'error': 'Missing Parameters',
+            'message': 'Both token and email are required'
+        }), 400
+
+    # Find customer by email
+    customer = Customer.query.filter_by(email=email.lower()).first()
+
+    if not customer:
+        return jsonify({
+            'error': 'Invalid Token',
+            'message': 'Invalid verification link'
+        }), 400
+
+    if customer.is_verified:
+        return jsonify({
+            'message': 'Email already verified'
+        }), 200
+
+    # Verify the token
+    secret_key = current_app.config.get('SECRET_KEY', 'secret')
+    expected_token = hmac.new(
+        secret_key.encode(),
+        f"{customer.id}:{customer.email}:{customer.created_at.isoformat()}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(token, expected_token):
+        return jsonify({
+            'error': 'Invalid Token',
+            'message': 'Invalid or expired verification link'
+        }), 400
+
+    # Mark as verified
+    customer.is_verified = True
+    customer.email_verified_at = datetime.utcnow()
+    db.session.commit()
+
+    current_app.logger.info(f"Email verified: {customer.email}")
+
     return jsonify({
-        'message': 'Email verification not yet implemented',
-        'todo': 'Implement email verification with secure tokens'
-    }), 501
+        'message': 'Email verified successfully'
+    }), 200
+
+
+@auth_bp.route('/send-verification', methods=['POST'])
+@jwt_required()
+@limiter.limit("3 per hour", key_func=rate_limit_key)
+def send_verification_email():
+    """Send verification email to current user"""
+    import hashlib
+    import hmac
+
+    current_customer = get_current_user()
+
+    if current_customer.is_verified:
+        return jsonify({
+            'message': 'Email already verified'
+        }), 200
+
+    # Generate verification token
+    secret_key = current_app.config.get('SECRET_KEY', 'secret')
+    token = hmac.new(
+        secret_key.encode(),
+        f"{current_customer.id}:{current_customer.email}:{current_customer.created_at.isoformat()}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    # Queue email sending job
+    try:
+        from redis import Redis
+        from rq import Queue
+
+        redis_url = current_app.config.get('REDIS_URL', 'redis://localhost:6379/0')
+        redis_conn = Redis.from_url(redis_url)
+        queue = Queue('default', connection=redis_conn)
+
+        portal_url = os.getenv('PORTAL_URL', 'http://localhost:5001')
+        verification_link = f"{portal_url}/verify-email?token={token}&email={current_customer.email}"
+
+        queue.enqueue(
+            'workers.jobs.notification_jobs.send_verification_email',
+            str(current_customer.id),
+            current_customer.email,
+            verification_link,
+            job_timeout=60
+        )
+
+        current_app.logger.info(f"Verification email queued for: {current_customer.email}")
+
+        return jsonify({
+            'message': 'Verification email sent'
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to queue verification email: {e}")
+        return jsonify({
+            'error': 'Email Failed',
+            'message': 'Failed to send verification email'
+        }), 500
+
 
 @auth_bp.route('/forgot-password', methods=['POST'])
 @limiter.limit("3 per minute", key_func=rate_limit_key)
 def forgot_password():
     """Request password reset"""
-    # TODO: Implement password reset
+    import hashlib
+    import hmac
+    import time
+
+    data = request.get_json() or {}
+    email = data.get('email')
+
+    if not email:
+        return jsonify({
+            'error': 'Missing Email',
+            'message': 'Email address is required'
+        }), 400
+
+    # Always return success to prevent email enumeration
+    customer = Customer.query.filter_by(email=email.lower()).first()
+
+    if customer and customer.is_active:
+        # Generate password reset token (valid for 1 hour)
+        secret_key = current_app.config.get('SECRET_KEY', 'secret')
+        timestamp = int(time.time())
+        token = hmac.new(
+            secret_key.encode(),
+            f"{customer.id}:{customer.email}:{timestamp}".encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        reset_token = f"{token}:{timestamp}"
+
+        # Queue email sending job
+        try:
+            from redis import Redis
+            from rq import Queue
+
+            redis_url = current_app.config.get('REDIS_URL', 'redis://localhost:6379/0')
+            redis_conn = Redis.from_url(redis_url)
+            queue = Queue('default', connection=redis_conn)
+
+            portal_url = os.getenv('PORTAL_URL', 'http://localhost:5001')
+            reset_link = f"{portal_url}/reset-password?token={reset_token}&email={customer.email}"
+
+            queue.enqueue(
+                'workers.jobs.notification_jobs.send_password_reset_email',
+                str(customer.id),
+                customer.email,
+                reset_link,
+                job_timeout=60
+            )
+
+            current_app.logger.info(f"Password reset email queued for: {customer.email}")
+
+        except Exception as e:
+            current_app.logger.error(f"Failed to queue password reset email: {e}")
+
+    # Always return success
     return jsonify({
-        'message': 'Password reset not yet implemented',
-        'todo': 'Implement secure password reset with email tokens'
-    }), 501
+        'message': 'If an account with that email exists, a password reset link has been sent'
+    }), 200
+
 
 @auth_bp.route('/reset-password', methods=['POST'])
 @limiter.limit("3 per minute", key_func=rate_limit_key)
 def reset_password():
     """Reset password with token"""
-    # TODO: Implement password reset confirmation
+    import hashlib
+    import hmac
+    import time
+
+    data = request.get_json() or {}
+    token = data.get('token')
+    email = data.get('email')
+    new_password = data.get('new_password')
+
+    if not all([token, email, new_password]):
+        return jsonify({
+            'error': 'Missing Parameters',
+            'message': 'Token, email, and new password are required'
+        }), 400
+
+    # Find customer
+    customer = Customer.query.filter_by(email=email.lower()).first()
+
+    if not customer:
+        return jsonify({
+            'error': 'Invalid Token',
+            'message': 'Invalid or expired reset link'
+        }), 400
+
+    # Parse and validate token
+    try:
+        token_parts = token.split(':')
+        if len(token_parts) != 2:
+            raise ValueError("Invalid token format")
+
+        received_hash = token_parts[0]
+        timestamp = int(token_parts[1])
+
+        # Check if token is expired (1 hour)
+        if time.time() - timestamp > 3600:
+            return jsonify({
+                'error': 'Token Expired',
+                'message': 'Password reset link has expired. Please request a new one.'
+            }), 400
+
+        # Verify token
+        secret_key = current_app.config.get('SECRET_KEY', 'secret')
+        expected_hash = hmac.new(
+            secret_key.encode(),
+            f"{customer.id}:{customer.email}:{timestamp}".encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(received_hash, expected_hash):
+            return jsonify({
+                'error': 'Invalid Token',
+                'message': 'Invalid or expired reset link'
+            }), 400
+
+    except (ValueError, IndexError):
+        return jsonify({
+            'error': 'Invalid Token',
+            'message': 'Invalid or expired reset link'
+        }), 400
+
+    # Validate password strength
+    from admin.app.utils.auth import AuthenticationService
+    is_valid, password_errors = AuthenticationService.validate_password_strength(new_password)
+    if not is_valid:
+        return jsonify({
+            'error': 'Weak Password',
+            'message': 'Password does not meet security requirements',
+            'details': password_errors
+        }), 400
+
+    # Update password
+    customer.set_password(new_password)
+    db.session.commit()
+
+    current_app.logger.info(f"Password reset completed for: {customer.email}")
+
     return jsonify({
-        'message': 'Password reset confirmation not yet implemented',
-        'todo': 'Implement password reset with secure token validation'
-    }), 501
+        'message': 'Password has been reset successfully'
+    }), 200
 
 # Health check for auth service
 @auth_bp.route('/health', methods=['GET'])

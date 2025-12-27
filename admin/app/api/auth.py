@@ -173,8 +173,34 @@ def logout():
         )
         current_app.logger.info(f"User logged out: {current_user.email}")
     
-    # TODO: Add token to blacklist (implement Redis-based token blacklist)
-    
+    # Add token to Redis blacklist
+    try:
+        from redis import Redis
+
+        redis_url = current_app.config.get('REDIS_URL') or os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+        redis_conn = Redis.from_url(redis_url)
+
+        # Get token expiry from JWT
+        jwt_data = get_jwt()
+        exp_timestamp = jwt_data.get('exp', 0)
+
+        # Calculate TTL (time until token expires)
+        import time
+        ttl = max(0, exp_timestamp - int(time.time()))
+
+        if ttl > 0:
+            # Add token JTI to blacklist with expiry
+            redis_conn.setex(
+                f"token_blacklist:{jti}",
+                ttl,
+                "revoked"
+            )
+            current_app.logger.info(f"Token {jti} added to blacklist with TTL {ttl}s")
+
+    except Exception as e:
+        current_app.logger.warning(f"Failed to add token to blacklist: {e}")
+        # Continue with logout even if blacklist fails
+
     return jsonify({
         'message': 'Logout successful'
     }), 200

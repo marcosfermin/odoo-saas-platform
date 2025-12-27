@@ -159,15 +159,43 @@ def create_tenant():
     
     db.session.add(new_tenant)
     db.session.commit()
-    
-    # TODO: Queue tenant provisioning job
+
+    # Queue tenant provisioning job
+    try:
+        from redis import Redis
+        from rq import Queue
+
+        redis_url = current_app.config.get('REDIS_URL', 'redis://localhost:6379/0')
+        redis_conn = Redis.from_url(redis_url)
+        queue = Queue('high', connection=redis_conn)
+
+        job = queue.enqueue(
+            'workers.jobs.tenant_jobs.provision_tenant_job',
+            str(new_tenant.id),
+            str(current_customer.id),
+            {
+                'slug': new_tenant.slug,
+                'name': new_tenant.name,
+                'db_name': new_tenant.db_name,
+                'plan_id': str(plan.id),
+                'odoo_version': new_tenant.odoo_version
+            },
+            job_timeout=600
+        )
+        current_app.logger.info(
+            f"Tenant provisioning job queued: {new_tenant.slug} (job_id: {job.id})"
+        )
+    except Exception as e:
+        current_app.logger.warning(f"Failed to queue provisioning job: {e}")
+
     current_app.logger.info(
         f"Tenant creation requested: {new_tenant.slug} by {current_customer.email}"
     )
-    
+
     return jsonify({
         'message': 'Tenant creation initiated',
-        'tenant': new_tenant.to_dict()
+        'tenant': new_tenant.to_dict(),
+        'status': 'provisioning'
     }), 201
 
 @tenants_bp.route('/<tenant_id>', methods=['GET'])
@@ -324,12 +352,72 @@ def install_module(tenant_id):
             'error': 'Tenant Not Active',
             'message': 'Modules can only be installed on active tenants'
         }), 400
-    
-    # TODO: Queue module installation job
-    return jsonify({
-        'message': 'Module installation not yet implemented',
-        'todo': 'Implement module installation via RQ jobs'
-    }), 501
+
+    # Get module name from request
+    data = request.get_json() or {}
+    module_name = data.get('module_name')
+
+    if not module_name:
+        return jsonify({
+            'error': 'Missing Module',
+            'message': 'module_name is required'
+        }), 400
+
+    # Check if module is allowed by plan
+    allowed_modules = []
+    if tenant.plan and tenant.plan.allowed_modules:
+        if isinstance(tenant.plan.allowed_modules, list):
+            allowed_modules = tenant.plan.allowed_modules
+        elif tenant.plan.allowed_modules == "*":
+            allowed_modules = None  # All modules allowed
+
+    if allowed_modules is not None and module_name not in allowed_modules:
+        return jsonify({
+            'error': 'Module Not Allowed',
+            'message': f'Module {module_name} is not included in your plan'
+        }), 403
+
+    # Check if already installed
+    if tenant.installed_modules and module_name in tenant.installed_modules:
+        return jsonify({
+            'error': 'Already Installed',
+            'message': f'Module {module_name} is already installed'
+        }), 400
+
+    # Queue module installation job
+    try:
+        from redis import Redis
+        from rq import Queue
+
+        redis_url = current_app.config.get('REDIS_URL', 'redis://localhost:6379/0')
+        redis_conn = Redis.from_url(redis_url)
+        queue = Queue('default', connection=redis_conn)
+
+        job = queue.enqueue(
+            'workers.jobs.tenant_jobs.install_module_job',
+            str(tenant.id),
+            module_name,
+            str(current_customer.id),
+            job_timeout=300
+        )
+
+        current_app.logger.info(
+            f"Module installation job queued: {module_name} for {tenant.slug} (job_id: {job.id})"
+        )
+
+        return jsonify({
+            'message': 'Module installation queued',
+            'job_id': job.id,
+            'module': module_name,
+            'tenant_id': str(tenant.id)
+        }), 202
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to queue module installation: {e}")
+        return jsonify({
+            'error': 'Queue Failed',
+            'message': 'Failed to queue module installation job'
+        }), 500
 
 @tenants_bp.route('/<tenant_id>/backup', methods=['POST'])
 @jwt_required()
@@ -354,16 +442,38 @@ def backup_tenant(tenant_id):
             'error': 'Tenant Not Active',
             'message': 'Backups can only be created for active tenants'
         }), 400
-    
-    # TODO: Queue backup job
-    current_app.logger.info(
-        f"Backup requested for tenant: {tenant.slug} by {current_customer.email}"
-    )
-    
-    return jsonify({
-        'message': 'Backup creation not yet implemented',
-        'todo': 'Implement backup creation via RQ jobs'
-    }), 501
+
+    # Queue backup job
+    try:
+        from redis import Redis
+        from rq import Queue
+
+        redis_url = current_app.config.get('REDIS_URL', 'redis://localhost:6379/0')
+        redis_conn = Redis.from_url(redis_url)
+        queue = Queue('default', connection=redis_conn)
+
+        job = queue.enqueue(
+            'workers.jobs.tenant_jobs.backup_tenant_job',
+            str(tenant.id),
+            job_timeout=1800  # 30 minutes for backup
+        )
+
+        current_app.logger.info(
+            f"Backup job queued for tenant: {tenant.slug} by {current_customer.email} (job_id: {job.id})"
+        )
+
+        return jsonify({
+            'message': 'Backup job queued successfully',
+            'job_id': job.id,
+            'tenant_id': str(tenant.id)
+        }), 202
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to queue backup job: {e}")
+        return jsonify({
+            'error': 'Queue Failed',
+            'message': 'Failed to queue backup job'
+        }), 500
 
 @tenants_bp.route('/<tenant_id>/logs', methods=['GET'])
 @jwt_required()
@@ -381,12 +491,52 @@ def get_tenant_logs(tenant_id):
             'error': 'Tenant Not Found',
             'message': 'The requested tenant does not exist or you do not have access to it'
         }), 404
-    
-    # TODO: Implement log retrieval
-    return jsonify({
-        'message': 'Log retrieval not yet implemented',
-        'todo': 'Implement log retrieval from tenant containers/processes'
-    }), 501
+
+    # Get pagination parameters
+    lines = min(request.args.get('lines', 100, type=int), 500)
+    log_type = request.args.get('type', 'odoo')  # odoo, error, access
+
+    # Try to retrieve logs from the Odoo service
+    try:
+        import requests
+        odoo_service_url = os.getenv('ODOO_SERVICE_URL', 'http://odoo-service:8080')
+
+        response = requests.get(
+            f"{odoo_service_url}/tenants/{tenant.id}/logs",
+            params={'lines': lines, 'type': log_type},
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            log_data = response.json()
+            return jsonify({
+                'tenant_id': str(tenant.id),
+                'tenant_slug': tenant.slug,
+                'log_type': log_type,
+                'lines_requested': lines,
+                'logs': log_data.get('logs', [])
+            }), 200
+        else:
+            current_app.logger.warning(
+                f"Failed to retrieve logs for {tenant.slug}: HTTP {response.status_code}"
+            )
+            return jsonify({
+                'tenant_id': str(tenant.id),
+                'tenant_slug': tenant.slug,
+                'log_type': log_type,
+                'logs': [],
+                'message': 'Log retrieval temporarily unavailable'
+            }), 200
+
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Error retrieving logs for {tenant.slug}: {e}")
+        return jsonify({
+            'tenant_id': str(tenant.id),
+            'tenant_slug': tenant.slug,
+            'log_type': log_type,
+            'logs': [],
+            'message': 'Log service temporarily unavailable'
+        }), 200
 
 # Health check
 @tenants_bp.route('/health', methods=['GET'])

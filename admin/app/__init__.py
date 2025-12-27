@@ -307,6 +307,29 @@ def register_jwt_callbacks(app):
             'message': 'A valid JWT token is required'
         }), 401
 
+    @jwt.token_in_blocklist_loader
+    def check_if_token_revoked(jwt_header, jwt_payload):
+        """Check if the token has been revoked (in Redis blacklist)"""
+        try:
+            jti = jwt_payload.get('jti')
+            if not jti:
+                return False
+
+            redis_url = get_redis_url()
+            redis_conn = redis.Redis.from_url(redis_url)
+            token_in_blacklist = redis_conn.get(f"token_blacklist:{jti}")
+            return token_in_blacklist is not None
+        except Exception as e:
+            app.logger.warning(f"Error checking token blacklist: {e}")
+            return False
+
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        return jsonify({
+            'error': 'Token Revoked',
+            'message': 'This token has been revoked. Please login again.'
+        }), 401
+
 def register_blueprints(app):
     """Register application blueprints"""
     from admin.app.api import auth_bp, tenants_bp, customers_bp, plans_bp, audit_bp, dashboard_bp, health_bp

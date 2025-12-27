@@ -499,26 +499,40 @@ def backup_tenant_job(tenant_id):
 def restore_tenant_job(tenant_id, backup_file):
     """
     Restore tenant from backup
-    
+
     Args:
         tenant_id (int): Tenant ID
-        backup_file (str): Backup file name
-    
+        backup_file (str): Backup file name or S3 key
+
     Returns:
         dict: Restore result
     """
+    import boto3
+    import tempfile
+    import subprocess
+    import gzip
+    import shutil
+
     logger.info(f"Restoring tenant {tenant_id} from backup {backup_file}")
-    
+
+    # Configuration
+    S3_BUCKET = os.environ.get('BACKUP_S3_BUCKET', 'odoo-saas-backups')
+    S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+    BACKUP_ENCRYPTION_KEY = os.environ.get('BACKUP_ENCRYPTION_KEY')
+
     try:
         # Update tenant status to restoring
         with get_db_session() as session:
             tenant = session.query(Tenant).get(tenant_id)
             if not tenant:
                 raise Exception(f"Tenant {tenant_id} not found")
-            
+
+            previous_status = tenant.status
             tenant.status = 'restoring'
+            db_name = tenant.db_name
+            filestore_path = tenant.filestore_path
             session.commit()
-            
+
             # Log audit event
             audit = AuditLog(
                 user_id=None,
@@ -526,21 +540,121 @@ def restore_tenant_job(tenant_id, backup_file):
                 action='tenant_restore_started',
                 resource_type='tenant',
                 resource_id=tenant_id,
-                details={'backup_file': backup_file}
+                details={'backup_file': backup_file, 'previous_status': previous_status}
             )
             session.add(audit)
             session.commit()
-        
-        # TODO: Call backup service or Odoo service to restore from backup
-        # This would integrate with the S3 backup service
-        logger.info(f"Restore functionality for tenant {tenant_id} - placeholder")
-        
+
+        # Initialize S3 client
+        s3_client = boto3.client('s3', region_name=S3_REGION)
+
+        # Create temp directory for restore
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download backup from S3
+            local_backup_path = os.path.join(temp_dir, 'backup.tar.gz')
+
+            logger.info(f"Downloading backup from S3: {backup_file}")
+            s3_client.download_file(S3_BUCKET, backup_file, local_backup_path)
+
+            # Extract backup
+            extract_dir = os.path.join(temp_dir, 'extracted')
+            os.makedirs(extract_dir, exist_ok=True)
+
+            logger.info("Extracting backup archive")
+            with gzip.open(local_backup_path, 'rb') as f_in:
+                import tarfile
+                with tarfile.open(fileobj=f_in) as tar:
+                    tar.extractall(extract_dir)
+
+            # Find database dump and filestore
+            db_dump_path = None
+            filestore_backup_path = None
+
+            for item in os.listdir(extract_dir):
+                item_path = os.path.join(extract_dir, item)
+                if item.endswith('.sql') or item.endswith('.dump'):
+                    db_dump_path = item_path
+                elif item == 'filestore' or item == 'files':
+                    filestore_backup_path = item_path
+
+            # Restore database
+            if db_dump_path:
+                logger.info(f"Restoring database {db_name}")
+
+                pg_host = os.environ.get('PG_HOST', 'localhost')
+                pg_port = os.environ.get('PG_PORT', '5432')
+                pg_user = os.environ.get('PG_USER', 'odoo')
+                pg_password = os.environ.get('PG_PASSWORD', '')
+
+                env = os.environ.copy()
+                env['PGPASSWORD'] = pg_password
+
+                # Drop existing database connections
+                try:
+                    subprocess.run([
+                        'psql', '-h', pg_host, '-p', pg_port, '-U', pg_user,
+                        '-d', 'postgres', '-c',
+                        f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}' AND pid <> pg_backend_pid();"
+                    ], env=env, check=False, capture_output=True)
+                except Exception:
+                    pass
+
+                # Drop and recreate database
+                subprocess.run([
+                    'dropdb', '-h', pg_host, '-p', pg_port, '-U', pg_user,
+                    '--if-exists', db_name
+                ], env=env, check=False, capture_output=True)
+
+                subprocess.run([
+                    'createdb', '-h', pg_host, '-p', pg_port, '-U', pg_user,
+                    '-O', pg_user, db_name
+                ], env=env, check=True, capture_output=True)
+
+                # Restore database
+                if db_dump_path.endswith('.sql'):
+                    subprocess.run([
+                        'psql', '-h', pg_host, '-p', pg_port, '-U', pg_user,
+                        '-d', db_name, '-f', db_dump_path
+                    ], env=env, check=True, capture_output=True)
+                else:
+                    subprocess.run([
+                        'pg_restore', '-h', pg_host, '-p', pg_port, '-U', pg_user,
+                        '-d', db_name, '--no-owner', db_dump_path
+                    ], env=env, check=True, capture_output=True)
+
+                logger.info(f"Database {db_name} restored successfully")
+
+            # Restore filestore
+            if filestore_backup_path and filestore_path:
+                logger.info(f"Restoring filestore to {filestore_path}")
+
+                # Clear existing filestore
+                if os.path.exists(filestore_path):
+                    shutil.rmtree(filestore_path)
+
+                # Copy restored filestore
+                shutil.copytree(filestore_backup_path, filestore_path)
+
+                logger.info("Filestore restored successfully")
+
+            # Call Odoo service to reinitialize tenant if needed
+            try:
+                response = requests.post(
+                    f"{ODOO_SERVICE_URL}/tenants/{tenant_id}/reinitialize",
+                    json={'restored_from': backup_file},
+                    timeout=60
+                )
+                if response.status_code == 200:
+                    logger.info(f"Tenant {tenant_id} reinitialized after restore")
+            except Exception as e:
+                logger.warning(f"Failed to reinitialize tenant after restore: {e}")
+
         # Update tenant status to active
         with get_db_session() as session:
             tenant = session.query(Tenant).get(tenant_id)
             tenant.status = 'active'
             session.commit()
-            
+
             # Log success
             audit = AuditLog(
                 user_id=None,
@@ -552,7 +666,7 @@ def restore_tenant_job(tenant_id, backup_file):
             )
             session.add(audit)
             session.commit()
-        
+
         logger.info(f"Successfully restored tenant {tenant_id} from backup")
         return {
             'status': 'success',
@@ -560,18 +674,31 @@ def restore_tenant_job(tenant_id, backup_file):
             'backup_file': backup_file,
             'message': 'Tenant restored successfully'
         }
-    
+
     except Exception as e:
         logger.error(f"Error restoring tenant {tenant_id}: {e}")
-        
-        # Update tenant status to failed
+
+        # Update tenant status to error
         try:
             with get_db_session() as session:
                 tenant = session.query(Tenant).get(tenant_id)
                 if tenant:
-                    tenant.status = 'failed'
+                    tenant.status = 'error'
+                    tenant.state_message = f"Restore failed: {str(e)}"
+                    session.commit()
+
+                    # Log failure
+                    audit = AuditLog(
+                        user_id=None,
+                        tenant_id=tenant_id,
+                        action='tenant_restore_failed',
+                        resource_type='tenant',
+                        resource_id=tenant_id,
+                        details={'backup_file': backup_file, 'error': str(e)}
+                    )
+                    session.add(audit)
                     session.commit()
         except Exception as db_error:
             logger.error(f"Failed to update tenant status: {db_error}")
-        
+
         raise
