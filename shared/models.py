@@ -14,14 +14,46 @@ import uuid
 from sqlalchemy import (
     Column, String, Integer, DateTime, Boolean, Text, JSON,
     ForeignKey, Numeric, BigInteger, Index, UniqueConstraint,
-    CheckConstraint, event
+    CheckConstraint, event, TypeDecorator, CHAR
 )
 from decimal import Decimal
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, validates
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy import JSON as JSONB  # Use generic JSON for SQLite compatibility
 from werkzeug.security import generate_password_hash, check_password_hash
+
+
+class GUID(TypeDecorator):
+    """Platform-independent GUID type.
+    Uses PostgreSQL's UUID type when available, otherwise uses CHAR(32).
+    """
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(PG_UUID(as_uuid=True))
+        else:
+            return dialect.type_descriptor(CHAR(32))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return value if isinstance(value, uuid.UUID) else uuid.UUID(value)
+        else:
+            if isinstance(value, uuid.UUID):
+                return value.hex
+            else:
+                return uuid.UUID(value).hex
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if isinstance(value, uuid.UUID):
+            return value
+        return uuid.UUID(value)
 
 Base = declarative_base()
 
@@ -78,7 +110,7 @@ class Customer(Base):
     """Customer accounts with authentication and authorization"""
     __tablename__ = "customers"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
     
@@ -162,7 +194,7 @@ class Plan(Base):
     """Billing plans with quotas and features"""
     __tablename__ = "plans"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False, unique=True)
     description = Column(Text)
     
@@ -203,13 +235,13 @@ class Tenant(Base):
     """Multi-tenant Odoo instances with isolation"""
     __tablename__ = "tenants"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     slug = Column(String(50), nullable=False, unique=True, index=True)
     name = Column(String(200), nullable=False)
     
     # Owner and plan
-    customer_id = Column(UUID(as_uuid=True), ForeignKey('customers.id'), nullable=False)
-    plan_id = Column(UUID(as_uuid=True), ForeignKey('plans.id'), nullable=False)
+    customer_id = Column(GUID(), ForeignKey('customers.id'), nullable=False)
+    plan_id = Column(GUID(), ForeignKey('plans.id'), nullable=False)
     
     # State management
     state = Column(String(20), default=TenantState.CREATING.value, nullable=False)
@@ -324,10 +356,10 @@ class AuditLog(Base):
     """Immutable audit trail for all platform operations"""
     __tablename__ = "audit_logs"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     
     # Actor (who performed the action)
-    actor_id = Column(UUID(as_uuid=True), ForeignKey('customers.id'))
+    actor_id = Column(GUID(), ForeignKey('customers.id'))
     actor_email = Column(String(255))  # Denormalized for deleted users
     actor_role = Column(String(20))
     
@@ -393,8 +425,8 @@ class UsageRecord(Base):
     """Periodic usage snapshots for billing and monitoring"""
     __tablename__ = "usage_records"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey('tenants.id'), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(GUID(), ForeignKey('tenants.id'), nullable=False)
     
     # Usage metrics
     db_size_bytes = Column(BigInteger, nullable=False)
@@ -430,9 +462,9 @@ class Subscription(Base):
     """Customer billing subscriptions"""
     __tablename__ = "subscriptions"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey('customers.id'), nullable=False)
-    plan_id = Column(UUID(as_uuid=True), ForeignKey('plans.id'), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    customer_id = Column(GUID(), ForeignKey('customers.id'), nullable=False)
+    plan_id = Column(GUID(), ForeignKey('plans.id'), nullable=False)
     
     # Billing provider integration
     provider = Column(String(20), nullable=False)  # stripe, paddle
@@ -471,8 +503,8 @@ class PaymentEvent(Base):
     """Payment events from billing providers"""
     __tablename__ = "payment_events"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    subscription_id = Column(UUID(as_uuid=True), ForeignKey('subscriptions.id'))
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    subscription_id = Column(GUID(), ForeignKey('subscriptions.id'))
     
     # Provider details
     provider = Column(String(20), nullable=False)
@@ -506,8 +538,8 @@ class Backup(Base):
     """Backup records with S3 storage details"""
     __tablename__ = "backups"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey('tenants.id'), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(GUID(), ForeignKey('tenants.id'), nullable=False)
     
     # Backup details
     type = Column(String(20), default='full', nullable=False)  # full, incremental
@@ -547,8 +579,8 @@ class SupportTicket(Base):
     """Customer support tickets"""
     __tablename__ = "support_tickets"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey('customers.id'), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    customer_id = Column(GUID(), ForeignKey('customers.id'), nullable=False)
     
     # Ticket details
     subject = Column(String(200), nullable=False)

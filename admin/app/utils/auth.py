@@ -276,7 +276,7 @@ def require_resource_access(
         action: Action being performed on the resource
         
     Usage:
-        @require_resource_access(lambda tenant_id: Tenant.query.get(tenant_id), 'write')
+        @require_resource_access(lambda tenant_id: db.session.get(Tenant, tenant_id), 'write')
         def update_tenant(tenant_id):
             pass
     """

@@ -77,7 +77,7 @@ def list_tickets():
         per_page = min(int(request.args.get('per_page', 20)), 100)
         
         # Build query
-        query = SupportTicket.query.filter_by(customer_id=customer_id)
+        query = db.session.query(SupportTicket).filter_by(customer_id=customer_id)
         
         if status:
             query = query.filter(SupportTicket.status == status)
@@ -134,7 +134,7 @@ def create_ticket():
         data = validate_json(request, TICKET_CREATE_SCHEMA)
         
         # Check customer exists
-        customer = Customer.query.get(customer_id)
+        customer = db.session.get(Customer, customer_id)
         if not customer:
             return jsonify({'error': 'Customer not found'}), 404
         
@@ -180,7 +180,7 @@ def get_ticket(ticket_id):
         customer_id = get_jwt_identity()
         
         # Find ticket
-        ticket = SupportTicket.query.filter_by(
+        ticket = db.session.query(SupportTicket).filter_by(
             id=ticket_id,
             customer_id=customer_id
         ).first()
@@ -219,7 +219,7 @@ def update_ticket(ticket_id):
         data = validate_json(request, TICKET_UPDATE_SCHEMA)
         
         # Find ticket
-        ticket = SupportTicket.query.filter_by(
+        ticket = db.session.query(SupportTicket).filter_by(
             id=ticket_id,
             customer_id=customer_id
         ).first()
@@ -273,7 +273,7 @@ def close_ticket(ticket_id):
         customer_id = get_jwt_identity()
         
         # Find ticket
-        ticket = SupportTicket.query.filter_by(
+        ticket = db.session.query(SupportTicket).filter_by(
             id=ticket_id,
             customer_id=customer_id
         ).first()
@@ -316,22 +316,22 @@ def get_stats():
         customer_id = get_jwt_identity()
         
         # Get ticket counts by status
-        open_count = SupportTicket.query.filter_by(
+        open_count = db.session.query(SupportTicket).filter_by(
             customer_id=customer_id,
             status='open'
         ).count()
         
-        in_progress_count = SupportTicket.query.filter_by(
+        in_progress_count = db.session.query(SupportTicket).filter_by(
             customer_id=customer_id,
             status='in_progress'
         ).count()
         
-        resolved_count = SupportTicket.query.filter_by(
+        resolved_count = db.session.query(SupportTicket).filter_by(
             customer_id=customer_id,
             status='resolved'
         ).count()
         
-        closed_count = SupportTicket.query.filter_by(
+        closed_count = db.session.query(SupportTicket).filter_by(
             customer_id=customer_id,
             status='closed'
         ).count()
@@ -342,7 +342,7 @@ def get_stats():
         from datetime import timedelta
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         
-        recent_count = SupportTicket.query.filter(
+        recent_count = db.session.query(SupportTicket).filter(
             SupportTicket.customer_id == customer_id,
             SupportTicket.created_at >= thirty_days_ago
         ).count()

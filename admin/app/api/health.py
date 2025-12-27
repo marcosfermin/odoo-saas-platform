@@ -101,9 +101,9 @@ def metrics():
     """Basic metrics for monitoring"""
     try:
         # Get basic database metrics
-        total_customers = Customer.query.count()
-        active_customers = Customer.query.filter_by(is_active=True).count()
-        admin_users = Customer.query.filter_by(role='admin').count()
+        total_customers = db.session.query(Customer).count()
+        active_customers = db.session.query(Customer).filter_by(is_active=True).count()
+        admin_users = db.session.query(Customer).filter_by(role='admin').count()
         
         return jsonify({
             'service': 'admin-dashboard',

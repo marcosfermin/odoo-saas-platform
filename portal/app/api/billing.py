@@ -31,7 +31,7 @@ def rate_limit_key():
 def list_plans():
     """List available billing plans"""
     # Get active plans
-    plans = Plan.query.filter_by(is_active=True).order_by(Plan.price_monthly).all()
+    plans = db.session.query(Plan).filter_by(is_active=True).order_by(Plan.price_monthly).all()
     
     plan_data = []
     for plan in plans:
@@ -70,7 +70,7 @@ def list_subscriptions():
     """List customer subscriptions"""
     current_customer = get_current_user()
     
-    subscriptions = Subscription.query.filter_by(
+    subscriptions = db.session.query(Subscription).filter_by(
         customer_id=current_customer.id
     ).order_by(Subscription.created_at.desc()).all()
     
@@ -106,7 +106,7 @@ def get_subscription(subscription_id):
     """Get subscription details"""
     current_customer = get_current_user()
     
-    subscription = Subscription.query.filter_by(
+    subscription = db.session.query(Subscription).filter_by(
         id=subscription_id,
         customer_id=current_customer.id
     ).first()
@@ -118,7 +118,7 @@ def get_subscription(subscription_id):
         }), 404
     
     # Get recent payment events
-    recent_payments = PaymentEvent.query.filter_by(
+    recent_payments = db.session.query(PaymentEvent).filter_by(
         subscription_id=subscription.id
     ).order_by(PaymentEvent.created_at.desc()).limit(10).all()
     
@@ -186,7 +186,7 @@ def create_checkout_session():
     current_customer = get_current_user()
     
     # Get plan
-    plan = Plan.query.get(plan_id)
+    plan = db.session.get(Plan, plan_id)
     if not plan or not plan.is_active:
         return jsonify({
             'error': 'Invalid Plan',
@@ -312,7 +312,7 @@ def create_paddle_checkout():
     current_customer = get_current_user()
     
     # Get plan
-    plan = Plan.query.get(plan_id)
+    plan = db.session.get(Plan, plan_id)
     if not plan or not plan.is_active:
         return jsonify({
             'error': 'Invalid Plan',
@@ -487,7 +487,7 @@ def cancel_subscription():
     
     current_customer = get_current_user()
     
-    subscription = Subscription.query.filter_by(
+    subscription = db.session.query(Subscription).filter_by(
         id=subscription_id,
         customer_id=current_customer.id
     ).first()
@@ -594,7 +594,7 @@ def get_usage():
     current_customer = get_current_user()
 
     # Calculate usage across all tenants
-    tenants = Tenant.query.filter_by(customer_id=current_customer.id).all()
+    tenants = db.session.query(Tenant).filter_by(customer_id=current_customer.id).all()
 
     total_users = sum(t.current_users for t in tenants)
     total_db_size = sum(t.db_size_bytes for t in tenants)
@@ -605,7 +605,7 @@ def get_usage():
     active_tenants = sum(1 for t in tenants if t.state == 'active')
 
     # Get subscription info for quotas
-    active_subscription = Subscription.query.filter_by(
+    active_subscription = db.session.query(Subscription).filter_by(
         customer_id=current_customer.id,
         status='active'
     ).first()

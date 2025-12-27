@@ -123,7 +123,7 @@ def list_audit_logs():
 @require_admin
 def get_audit_log(log_id):
     """Get single audit log entry"""
-    log = AuditLog.query.get(log_id)
+    log = db.session.get(AuditLog, log_id)
 
     if not log:
         return jsonify({
@@ -151,7 +151,7 @@ def get_audit_log(log_id):
 
     # Include actor details if available
     if log.actor_id:
-        actor = Customer.query.get(log.actor_id)
+        actor = db.session.get(Customer, log.actor_id)
         if actor:
             log_data['actor'] = {
                 'id': str(actor.id),
@@ -191,10 +191,10 @@ def get_audit_stats():
     last_30d = now - timedelta(days=30)
 
     # Total counts
-    total_logs = AuditLog.query.count()
-    logs_24h = AuditLog.query.filter(AuditLog.created_at >= last_24h).count()
-    logs_7d = AuditLog.query.filter(AuditLog.created_at >= last_7d).count()
-    logs_30d = AuditLog.query.filter(AuditLog.created_at >= last_30d).count()
+    total_logs = db.session.query(AuditLog).count()
+    logs_24h = db.session.query(AuditLog).filter(AuditLog.created_at >= last_24h).count()
+    logs_7d = db.session.query(AuditLog).filter(AuditLog.created_at >= last_7d).count()
+    logs_30d = db.session.query(AuditLog).filter(AuditLog.created_at >= last_30d).count()
 
     # Actions breakdown (last 30 days)
     action_stats = db.session.query(
@@ -232,7 +232,7 @@ def get_audit_stats():
 
     # Security-related actions (last 24 hours)
     security_actions = ['login', 'logout', 'impersonate']
-    security_events_24h = AuditLog.query.filter(
+    security_events_24h = db.session.query(AuditLog).filter(
         AuditLog.created_at >= last_24h,
         AuditLog.action.in_(security_actions)
     ).count()
@@ -286,7 +286,7 @@ def export_audit_logs():
         }), 400
 
     # Query logs
-    query = AuditLog.query.filter(
+    query = db.session.query(AuditLog).filter(
         AuditLog.created_at >= start_dt,
         AuditLog.created_at <= end_dt
     ).order_by(AuditLog.created_at.asc())
@@ -342,7 +342,7 @@ def export_audit_logs():
 @require_admin
 def verify_audit_log(log_id):
     """Verify audit log integrity (check payload hash)"""
-    log = AuditLog.query.get(log_id)
+    log = db.session.get(AuditLog, log_id)
 
     if not log:
         return jsonify({

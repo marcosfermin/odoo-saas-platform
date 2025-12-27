@@ -34,26 +34,26 @@ def get_dashboard_stats():
     last_30d = now - timedelta(days=30)
 
     # Customer statistics
-    total_customers = Customer.query.count()
-    active_customers = Customer.query.filter(Customer.is_active == True).count()
-    new_customers_24h = Customer.query.filter(Customer.created_at >= last_24h).count()
-    new_customers_7d = Customer.query.filter(Customer.created_at >= last_7d).count()
-    new_customers_30d = Customer.query.filter(Customer.created_at >= last_30d).count()
+    total_customers = db.session.query(Customer).count()
+    active_customers = db.session.query(Customer).filter(Customer.is_active == True).count()
+    new_customers_24h = db.session.query(Customer).filter(Customer.created_at >= last_24h).count()
+    new_customers_7d = db.session.query(Customer).filter(Customer.created_at >= last_7d).count()
+    new_customers_30d = db.session.query(Customer).filter(Customer.created_at >= last_30d).count()
 
     # Tenant statistics
-    total_tenants = Tenant.query.count()
-    active_tenants = Tenant.query.filter(Tenant.state == TenantState.ACTIVE.value).count()
-    suspended_tenants = Tenant.query.filter(Tenant.state == TenantState.SUSPENDED.value).count()
-    creating_tenants = Tenant.query.filter(Tenant.state == TenantState.CREATING.value).count()
-    error_tenants = Tenant.query.filter(Tenant.state == TenantState.ERROR.value).count()
-    new_tenants_24h = Tenant.query.filter(Tenant.created_at >= last_24h).count()
-    new_tenants_7d = Tenant.query.filter(Tenant.created_at >= last_7d).count()
+    total_tenants = db.session.query(Tenant).count()
+    active_tenants = db.session.query(Tenant).filter(Tenant.state == TenantState.ACTIVE.value).count()
+    suspended_tenants = db.session.query(Tenant).filter(Tenant.state == TenantState.SUSPENDED.value).count()
+    creating_tenants = db.session.query(Tenant).filter(Tenant.state == TenantState.CREATING.value).count()
+    error_tenants = db.session.query(Tenant).filter(Tenant.state == TenantState.ERROR.value).count()
+    new_tenants_24h = db.session.query(Tenant).filter(Tenant.created_at >= last_24h).count()
+    new_tenants_7d = db.session.query(Tenant).filter(Tenant.created_at >= last_7d).count()
 
     # Subscription statistics
-    total_subscriptions = Subscription.query.count()
-    active_subscriptions = Subscription.query.filter(Subscription.status == 'active').count()
-    trialing_subscriptions = Subscription.query.filter(Subscription.status == 'trialing').count()
-    canceled_subscriptions_30d = Subscription.query.filter(
+    total_subscriptions = db.session.query(Subscription).count()
+    active_subscriptions = db.session.query(Subscription).filter(Subscription.status == 'active').count()
+    trialing_subscriptions = db.session.query(Subscription).filter(Subscription.status == 'trialing').count()
+    canceled_subscriptions_30d = db.session.query(Subscription).filter(
         Subscription.canceled_at >= last_30d
     ).count()
 
@@ -76,16 +76,16 @@ def get_dashboard_stats():
     total_filestore_size = db.session.query(func.sum(Tenant.filestore_size_bytes)).scalar() or 0
 
     # Support tickets
-    open_tickets = SupportTicket.query.filter(
+    open_tickets = db.session.query(SupportTicket).filter(
         SupportTicket.status.in_(['open', 'in_progress'])
     ).count()
-    urgent_tickets = SupportTicket.query.filter(
+    urgent_tickets = db.session.query(SupportTicket).filter(
         SupportTicket.status.in_(['open', 'in_progress']),
         SupportTicket.priority == 'urgent'
     ).count()
 
     # Recent activity (audit logs)
-    recent_logins = AuditLog.query.filter(
+    recent_logins = db.session.query(AuditLog).filter(
         AuditLog.action == 'login',
         AuditLog.created_at >= last_24h
     ).count()
@@ -234,7 +234,7 @@ def get_recent_activity():
     limit = min(limit, 100)
 
     # Get recent audit logs
-    recent_logs = AuditLog.query.order_by(
+    recent_logs = db.session.query(AuditLog).order_by(
         AuditLog.created_at.desc()
     ).limit(limit).all()
 
@@ -260,7 +260,7 @@ def get_system_alerts():
     alerts = []
 
     # Check for error tenants
-    error_count = Tenant.query.filter(Tenant.state == TenantState.ERROR.value).count()
+    error_count = db.session.query(Tenant).filter(Tenant.state == TenantState.ERROR.value).count()
     if error_count > 0:
         alerts.append({
             'type': 'error',
@@ -271,7 +271,7 @@ def get_system_alerts():
 
     # Check for stuck creating tenants (>1 hour old)
     one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-    stuck_creating = Tenant.query.filter(
+    stuck_creating = db.session.query(Tenant).filter(
         Tenant.state == TenantState.CREATING.value,
         Tenant.created_at < one_hour_ago
     ).count()
@@ -284,7 +284,7 @@ def get_system_alerts():
         })
 
     # Check for urgent support tickets
-    urgent_tickets = SupportTicket.query.filter(
+    urgent_tickets = db.session.query(SupportTicket).filter(
         SupportTicket.status.in_(['open', 'in_progress']),
         SupportTicket.priority == 'urgent'
     ).count()
@@ -298,7 +298,7 @@ def get_system_alerts():
 
     # Check for failed payments (last 24 hours)
     last_24h = datetime.utcnow() - timedelta(hours=24)
-    failed_payments = PaymentEvent.query.filter(
+    failed_payments = db.session.query(PaymentEvent).filter(
         PaymentEvent.created_at >= last_24h,
         PaymentEvent.status == 'failed'
     ).count()
@@ -312,7 +312,7 @@ def get_system_alerts():
 
     # Check for expiring trials (next 3 days)
     three_days = datetime.utcnow() + timedelta(days=3)
-    expiring_trials = Subscription.query.filter(
+    expiring_trials = db.session.query(Subscription).filter(
         Subscription.status == 'trialing',
         Subscription.trial_end <= three_days,
         Subscription.trial_end > datetime.utcnow()

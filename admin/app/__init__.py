@@ -257,6 +257,7 @@ def register_error_handlers(app):
 
 def register_jwt_callbacks(app):
     """Register JWT callbacks for user loading and verification"""
+    from flask import jsonify
     from flask_jwt_extended import get_jwt
     import sys
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))

@@ -122,8 +122,8 @@ def list_plans():
             'trial_days': plan.trial_days,
             'created_at': plan.created_at.isoformat() if plan.created_at else None,
             # Add usage stats
-            'tenant_count': Tenant.query.filter_by(plan_id=plan.id).count(),
-            'subscription_count': Subscription.query.filter_by(plan_id=plan.id).count()
+            'tenant_count': db.session.query(Tenant).filter_by(plan_id=plan.id).count(),
+            'subscription_count': db.session.query(Subscription).filter_by(plan_id=plan.id).count()
         }
         plans.append(plan_data)
 
@@ -144,7 +144,7 @@ def list_plans():
 @require_admin
 def get_plan(plan_id):
     """Get plan details"""
-    plan = Plan.query.get(plan_id)
+    plan = db.session.get(Plan, plan_id)
 
     if not plan:
         return jsonify({
@@ -175,8 +175,8 @@ def get_plan(plan_id):
     }
 
     # Add usage statistics
-    tenants = Tenant.query.filter_by(plan_id=plan.id).all()
-    subscriptions = Subscription.query.filter_by(plan_id=plan.id).all()
+    tenants = db.session.query(Tenant).filter_by(plan_id=plan.id).all()
+    subscriptions = db.session.query(Subscription).filter_by(plan_id=plan.id).all()
 
     plan_data['statistics'] = {
         'tenant_count': len(tenants),
@@ -212,7 +212,7 @@ def create_plan():
         }), 400
 
     # Check if name exists
-    existing = Plan.query.filter_by(name=data['name']).first()
+    existing = db.session.query(Plan).filter_by(name=data['name']).first()
     if existing:
         return jsonify({
             'error': 'Name Exists',
@@ -281,7 +281,7 @@ def update_plan(plan_id):
             'details': err.messages
         }), 400
 
-    plan = Plan.query.get(plan_id)
+    plan = db.session.get(Plan, plan_id)
     if not plan:
         return jsonify({
             'error': 'Plan Not Found',
@@ -290,7 +290,7 @@ def update_plan(plan_id):
 
     # Check for name conflict
     if 'name' in data and data['name'] != plan.name:
-        existing = Plan.query.filter_by(name=data['name']).first()
+        existing = db.session.query(Plan).filter_by(name=data['name']).first()
         if existing:
             return jsonify({
                 'error': 'Name Exists',
@@ -337,7 +337,7 @@ def update_plan(plan_id):
 @limiter.limit("10 per hour", key_func=rate_limit_key)
 def delete_plan(plan_id):
     """Delete plan (if no tenants/subscriptions are using it)"""
-    plan = Plan.query.get(plan_id)
+    plan = db.session.get(Plan, plan_id)
 
     if not plan:
         return jsonify({
@@ -346,7 +346,7 @@ def delete_plan(plan_id):
         }), 404
 
     # Check for associated tenants
-    tenant_count = Tenant.query.filter_by(plan_id=plan.id).count()
+    tenant_count = db.session.query(Tenant).filter_by(plan_id=plan.id).count()
     if tenant_count > 0:
         return jsonify({
             'error': 'Plan In Use',
@@ -354,7 +354,7 @@ def delete_plan(plan_id):
         }), 400
 
     # Check for active subscriptions
-    sub_count = Subscription.query.filter(
+    sub_count = db.session.query(Subscription).filter(
         Subscription.plan_id == plan.id,
         Subscription.status.in_(['active', 'trialing'])
     ).count()
@@ -387,7 +387,7 @@ def delete_plan(plan_id):
 @require_admin
 def deactivate_plan(plan_id):
     """Deactivate a plan (prevent new subscriptions)"""
-    plan = Plan.query.get(plan_id)
+    plan = db.session.get(Plan, plan_id)
 
     if not plan:
         return jsonify({
@@ -427,7 +427,7 @@ def deactivate_plan(plan_id):
 @require_admin
 def activate_plan(plan_id):
     """Activate a plan"""
-    plan = Plan.query.get(plan_id)
+    plan = db.session.get(Plan, plan_id)
 
     if not plan:
         return jsonify({

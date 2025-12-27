@@ -238,7 +238,7 @@ def register():
         }), 400
     
     # Check if user already exists
-    existing_user = Customer.query.filter_by(email=data['email'].lower()).first()
+    existing_user = db.session.query(Customer).filter_by(email=data['email'].lower()).first()
     if existing_user:
         return jsonify({
             'error': 'User Exists',
@@ -422,7 +422,7 @@ def list_users():
     per_page = min(request.args.get('per_page', 20, type=int), 100)
     
     # Filter by role (admins only)
-    query = Customer.query.filter(
+    query = db.session.query(Customer).filter(
         Customer.role.in_([CustomerRole.ADMIN.value, CustomerRole.OWNER.value])
     )
     
@@ -469,7 +469,7 @@ def list_users():
 @require_admin
 def toggle_user_status(user_id):
     """Toggle user active/inactive status (admin only)"""
-    user = Customer.query.get_or_404(user_id)
+    user = db.session.get(Customer, user_id)
     current_user = get_current_user()
     
     # Prevent self-deactivation

@@ -125,7 +125,7 @@ def list_tenants():
 @require_admin
 def get_tenant(tenant_id):
     """Get tenant details"""
-    tenant = Tenant.query.get(tenant_id)
+    tenant = db.session.get(Tenant, tenant_id)
 
     if not tenant:
         return jsonify({
@@ -183,7 +183,7 @@ def create_tenant():
         }), 400
 
     # Validate customer exists
-    customer = Customer.query.get(data['customer_id'])
+    customer = db.session.get(Customer, data['customer_id'])
     if not customer:
         return jsonify({
             'error': 'Customer Not Found',
@@ -191,7 +191,7 @@ def create_tenant():
         }), 400
 
     # Validate plan exists
-    plan = Plan.query.get(data['plan_id'])
+    plan = db.session.get(Plan, data['plan_id'])
     if not plan or not plan.is_active:
         return jsonify({
             'error': 'Invalid Plan',
@@ -199,7 +199,7 @@ def create_tenant():
         }), 400
 
     # Check if slug is available
-    existing = Tenant.query.filter_by(slug=data['slug']).first()
+    existing = db.session.query(Tenant).filter_by(slug=data['slug']).first()
     if existing:
         return jsonify({
             'error': 'Slug Unavailable',
@@ -215,7 +215,7 @@ def create_tenant():
         }), 400
 
     # Check customer tenant limit
-    existing_count = Tenant.query.filter_by(customer_id=customer.id).count()
+    existing_count = db.session.query(Tenant).filter_by(customer_id=customer.id).count()
     if existing_count >= customer.max_tenants:
         return jsonify({
             'error': 'Tenant Limit Reached',
@@ -302,7 +302,7 @@ def update_tenant(tenant_id):
             'details': err.messages
         }), 400
 
-    tenant = Tenant.query.get(tenant_id)
+    tenant = db.session.get(Tenant, tenant_id)
     if not tenant:
         return jsonify({
             'error': 'Tenant Not Found',
@@ -318,7 +318,7 @@ def update_tenant(tenant_id):
 
     # Validate plan if changing
     if 'plan_id' in data:
-        plan = Plan.query.get(data['plan_id'])
+        plan = db.session.get(Plan, data['plan_id'])
         if not plan or not plan.is_active:
             return jsonify({
                 'error': 'Invalid Plan',
@@ -354,7 +354,7 @@ def update_tenant(tenant_id):
 @limiter.limit("10 per hour", key_func=rate_limit_key)
 def delete_tenant(tenant_id):
     """Delete tenant (marks for deletion)"""
-    tenant = Tenant.query.get(tenant_id)
+    tenant = db.session.get(Tenant, tenant_id)
 
     if not tenant:
         return jsonify({
@@ -412,7 +412,7 @@ def delete_tenant(tenant_id):
 @require_admin
 def suspend_tenant(tenant_id):
     """Suspend a tenant"""
-    tenant = Tenant.query.get(tenant_id)
+    tenant = db.session.get(Tenant, tenant_id)
 
     if not tenant:
         return jsonify({
@@ -450,7 +450,7 @@ def suspend_tenant(tenant_id):
 @require_admin
 def unsuspend_tenant(tenant_id):
     """Unsuspend a tenant"""
-    tenant = Tenant.query.get(tenant_id)
+    tenant = db.session.get(Tenant, tenant_id)
 
     if not tenant:
         return jsonify({
@@ -489,7 +489,7 @@ def unsuspend_tenant(tenant_id):
 @limiter.limit("5 per hour", key_func=rate_limit_key)
 def backup_tenant(tenant_id):
     """Create a backup for a tenant"""
-    tenant = Tenant.query.get(tenant_id)
+    tenant = db.session.get(Tenant, tenant_id)
 
     if not tenant:
         return jsonify({
@@ -547,7 +547,7 @@ def backup_tenant(tenant_id):
 @limiter.limit("3 per hour", key_func=rate_limit_key)
 def restore_tenant(tenant_id):
     """Restore tenant from backup"""
-    tenant = Tenant.query.get(tenant_id)
+    tenant = db.session.get(Tenant, tenant_id)
 
     if not tenant:
         return jsonify({

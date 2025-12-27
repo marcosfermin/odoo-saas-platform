@@ -49,7 +49,7 @@ def list_tenants():
     per_page = min(request.args.get('per_page', 20, type=int), 100)
     
     # Filter tenants by current customer
-    query = Tenant.query.filter_by(customer_id=current_customer.id)
+    query = db.session.query(Tenant).filter_by(customer_id=current_customer.id)
     
     # Apply state filter
     state = request.args.get('state')
@@ -110,7 +110,7 @@ def create_tenant():
     current_customer = get_current_user()
     
     # Check if customer has reached tenant limit
-    existing_tenants = Tenant.query.filter_by(customer_id=current_customer.id).count()
+    existing_tenants = db.session.query(Tenant).filter_by(customer_id=current_customer.id).count()
     if existing_tenants >= current_customer.max_tenants:
         return jsonify({
             'error': 'Tenant Limit Reached',
@@ -118,7 +118,7 @@ def create_tenant():
         }), 400
     
     # Validate plan exists and is active
-    plan = Plan.query.get(data['plan_id'])
+    plan = db.session.get(Plan, data['plan_id'])
     if not plan or not plan.is_active:
         return jsonify({
             'error': 'Invalid Plan',
@@ -126,7 +126,7 @@ def create_tenant():
         }), 400
     
     # Check if slug is available
-    existing_slug = Tenant.query.filter_by(slug=data['slug']).first()
+    existing_slug = db.session.query(Tenant).filter_by(slug=data['slug']).first()
     if existing_slug:
         return jsonify({
             'error': 'Slug Unavailable',
@@ -204,7 +204,7 @@ def get_tenant(tenant_id):
     """Get tenant details"""
     current_customer = get_current_user()
     
-    tenant = Tenant.query.filter_by(
+    tenant = db.session.query(Tenant).filter_by(
         id=tenant_id,
         customer_id=current_customer.id
     ).first()
@@ -260,7 +260,7 @@ def update_tenant(tenant_id):
     
     current_customer = get_current_user()
     
-    tenant = Tenant.query.filter_by(
+    tenant = db.session.query(Tenant).filter_by(
         id=tenant_id,
         customer_id=current_customer.id
     ).first()
@@ -299,7 +299,7 @@ def list_modules(tenant_id):
     """List installed modules for tenant"""
     current_customer = get_current_user()
     
-    tenant = Tenant.query.filter_by(
+    tenant = db.session.query(Tenant).filter_by(
         id=tenant_id,
         customer_id=current_customer.id
     ).first()
@@ -336,7 +336,7 @@ def install_module(tenant_id):
     """Install module on tenant"""
     current_customer = get_current_user()
     
-    tenant = Tenant.query.filter_by(
+    tenant = db.session.query(Tenant).filter_by(
         id=tenant_id,
         customer_id=current_customer.id
     ).first()
@@ -426,7 +426,7 @@ def backup_tenant(tenant_id):
     """Create tenant backup"""
     current_customer = get_current_user()
     
-    tenant = Tenant.query.filter_by(
+    tenant = db.session.query(Tenant).filter_by(
         id=tenant_id,
         customer_id=current_customer.id
     ).first()
@@ -481,7 +481,7 @@ def get_tenant_logs(tenant_id):
     """Get tenant logs (last 100 lines)"""
     current_customer = get_current_user()
     
-    tenant = Tenant.query.filter_by(
+    tenant = db.session.query(Tenant).filter_by(
         id=tenant_id,
         customer_id=current_customer.id
     ).first()

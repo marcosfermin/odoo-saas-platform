@@ -41,8 +41,47 @@ def app():
 
 @pytest.fixture(scope='function')
 def client(app):
-    """Create test client"""
+    """Create test client for admin app"""
     return app.test_client()
+
+
+@pytest.fixture(scope='session')
+def portal_app():
+    """Create portal application for testing"""
+    from portal.app import create_app, db
+    from shared.models import Base
+
+    app = create_app('testing')
+
+    # Create tables using the shared models Base
+    with app.app_context():
+        Base.metadata.create_all(bind=db.engine)
+        yield app
+        Base.metadata.drop_all(bind=db.engine)
+
+
+@pytest.fixture(scope='function')
+def portal_client(portal_app):
+    """Create test client for portal app"""
+    return portal_app.test_client()
+
+
+@pytest.fixture(scope='function')
+def portal_db_session(portal_app):
+    """Create database session for portal testing"""
+    from portal.app import db
+    from shared.models import Base
+
+    with portal_app.app_context():
+        # Clear all tables before each test
+        for table in reversed(Base.metadata.sorted_tables):
+            db.session.execute(table.delete())
+        db.session.commit()
+
+        yield db.session
+
+        # Rollback any uncommitted changes
+        db.session.rollback()
 
 
 @pytest.fixture(scope='function')

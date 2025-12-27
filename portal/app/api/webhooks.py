@@ -120,7 +120,7 @@ def stripe_webhook():
         current_app.logger.info(f"Received Stripe webhook: {event_type} ({event_id})")
         
         # Check if we've already processed this event
-        existing_event = PaymentEvent.query.filter_by(
+        existing_event = db.session.query(PaymentEvent).filter_by(
             provider='stripe',
             external_id=event_id
         ).first()
@@ -173,7 +173,7 @@ def paddle_webhook():
                 return jsonify({'error': 'Invalid signature'}), 400
         
         # Check if we've already processed this event
-        existing_event = PaymentEvent.query.filter_by(
+        existing_event = db.session.query(PaymentEvent).filter_by(
             provider='paddle',
             external_id=alert_id
         ).first()
@@ -216,7 +216,7 @@ def handle_stripe_subscription_created(event):
     if not customer_id:
         # Try to find customer by Stripe customer ID
         stripe_customer_id = subscription_data.get('customer')
-        customer = Customer.query.filter_by(stripe_customer_id=stripe_customer_id).first()
+        customer = db.session.query(Customer).filter_by(stripe_customer_id=stripe_customer_id).first()
         if customer:
             customer_id = str(customer.id)
 
@@ -228,7 +228,7 @@ def handle_stripe_subscription_created(event):
     if not plan_id and subscription_data.get('items', {}).get('data'):
         price_id = subscription_data['items']['data'][0].get('price', {}).get('id')
         if price_id:
-            plan = Plan.query.filter(
+            plan = db.session.query(Plan).filter(
                 (Plan.stripe_price_id_monthly == price_id) |
                 (Plan.stripe_price_id_yearly == price_id)
             ).first()
@@ -266,7 +266,7 @@ def handle_stripe_subscription_updated(event):
     subscription_data = event['data']['object']
     
     # Find existing subscription
-    subscription = Subscription.query.filter_by(
+    subscription = db.session.query(Subscription).filter_by(
         provider='stripe',
         external_id=subscription_data['id']
     ).first()
@@ -291,7 +291,7 @@ def handle_stripe_subscription_deleted(event):
     """Handle Stripe subscription.deleted event"""
     subscription_data = event['data']['object']
     
-    subscription = Subscription.query.filter_by(
+    subscription = db.session.query(Subscription).filter_by(
         provider='stripe',
         external_id=subscription_data['id']
     ).first()
@@ -320,7 +320,7 @@ def handle_stripe_invoice_payment_succeeded(event):
     
     # Link to subscription if available
     if invoice_data.get('subscription'):
-        subscription = Subscription.query.filter_by(
+        subscription = db.session.query(Subscription).filter_by(
             provider='stripe',
             external_id=invoice_data['subscription']
         ).first()
@@ -350,7 +350,7 @@ def handle_stripe_invoice_payment_failed(event):
     
     # Link to subscription if available
     if invoice_data.get('subscription'):
-        subscription = Subscription.query.filter_by(
+        subscription = db.session.query(Subscription).filter_by(
             provider='stripe',
             external_id=invoice_data['subscription']
         ).first()
@@ -367,7 +367,7 @@ def handle_stripe_trial_will_end(event):
     subscription_data = event['data']['object']
 
     # Find the subscription and customer
-    subscription = Subscription.query.filter_by(
+    subscription = db.session.query(Subscription).filter_by(
         provider='stripe',
         external_id=subscription_data['id']
     ).first()
@@ -422,7 +422,7 @@ def handle_paddle_subscription_created(data):
         # Try to find customer by email
         email = data.get('email')
         if email:
-            customer = Customer.query.filter_by(email=email.lower()).first()
+            customer = db.session.query(Customer).filter_by(email=email.lower()).first()
             if customer:
                 customer_id = str(customer.id)
 
@@ -434,7 +434,7 @@ def handle_paddle_subscription_created(data):
     if not plan_id:
         paddle_plan_id = data.get('subscription_plan_id')
         if paddle_plan_id:
-            plan = Plan.query.filter_by(paddle_plan_id=str(paddle_plan_id)).first()
+            plan = db.session.query(Plan).filter_by(paddle_plan_id=str(paddle_plan_id)).first()
             if plan:
                 plan_id = str(plan.id)
 
@@ -475,7 +475,7 @@ def handle_paddle_subscription_updated(data):
     """Handle Paddle subscription_updated alert"""
     subscription_id = data.get('subscription_id')
     
-    subscription = Subscription.query.filter_by(
+    subscription = db.session.query(Subscription).filter_by(
         provider='paddle',
         external_id=subscription_id
     ).first()
@@ -492,7 +492,7 @@ def handle_paddle_subscription_cancelled(data):
     """Handle Paddle subscription_cancelled alert"""
     subscription_id = data.get('subscription_id')
     
-    subscription = Subscription.query.filter_by(
+    subscription = db.session.query(Subscription).filter_by(
         provider='paddle',
         external_id=subscription_id
     ).first()
@@ -520,7 +520,7 @@ def handle_paddle_payment_succeeded(data):
     # Link to subscription if available
     subscription_id = data.get('subscription_id')
     if subscription_id:
-        subscription = Subscription.query.filter_by(
+        subscription = db.session.query(Subscription).filter_by(
             provider='paddle',
             external_id=subscription_id
         ).first()
@@ -549,7 +549,7 @@ def handle_paddle_payment_failed(data):
     # Link to subscription if available
     subscription_id = data.get('subscription_id')
     if subscription_id:
-        subscription = Subscription.query.filter_by(
+        subscription = db.session.query(Subscription).filter_by(
             provider='paddle',
             external_id=subscription_id
         ).first()

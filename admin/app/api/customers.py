@@ -106,9 +106,9 @@ def list_customers():
     for customer in pagination.items:
         customer_data = customer.to_dict()
         # Add tenant count
-        customer_data['tenant_count'] = Tenant.query.filter_by(customer_id=customer.id).count()
+        customer_data['tenant_count'] = db.session.query(Tenant).filter_by(customer_id=customer.id).count()
         # Add subscription info
-        active_sub = Subscription.query.filter_by(
+        active_sub = db.session.query(Subscription).filter_by(
             customer_id=customer.id,
             status='active'
         ).first()
@@ -137,7 +137,7 @@ def list_customers():
 @require_admin
 def get_customer(customer_id):
     """Get customer details"""
-    customer = Customer.query.get(customer_id)
+    customer = db.session.get(Customer, customer_id)
 
     if not customer:
         return jsonify({
@@ -148,11 +148,11 @@ def get_customer(customer_id):
     customer_data = customer.to_dict()
 
     # Add tenants
-    tenants = Tenant.query.filter_by(customer_id=customer.id).all()
+    tenants = db.session.query(Tenant).filter_by(customer_id=customer.id).all()
     customer_data['tenants'] = [t.to_dict() for t in tenants]
 
     # Add subscriptions
-    subscriptions = Subscription.query.filter_by(customer_id=customer.id).all()
+    subscriptions = db.session.query(Subscription).filter_by(customer_id=customer.id).all()
     customer_data['subscriptions'] = []
     for sub in subscriptions:
         sub_data = {
@@ -201,7 +201,7 @@ def create_customer():
         }), 400
 
     # Check if email exists
-    existing = Customer.query.filter_by(email=data['email'].lower()).first()
+    existing = db.session.query(Customer).filter_by(email=data['email'].lower()).first()
     if existing:
         return jsonify({
             'error': 'Email Exists',
@@ -270,7 +270,7 @@ def update_customer(customer_id):
             'details': err.messages
         }), 400
 
-    customer = Customer.query.get(customer_id)
+    customer = db.session.get(Customer, customer_id)
     if not customer:
         return jsonify({
             'error': 'Customer Not Found',
@@ -333,7 +333,7 @@ def update_customer(customer_id):
 @limiter.limit("10 per hour", key_func=rate_limit_key)
 def delete_customer(customer_id):
     """Delete customer (and all associated tenants)"""
-    customer = Customer.query.get(customer_id)
+    customer = db.session.get(Customer, customer_id)
 
     if not customer:
         return jsonify({
@@ -351,7 +351,7 @@ def delete_customer(customer_id):
         }), 400
 
     # Check for active tenants
-    active_tenants = Tenant.query.filter(
+    active_tenants = db.session.query(Tenant).filter(
         Tenant.customer_id == customer.id,
         Tenant.state.notin_(['deleted', 'deleting'])
     ).count()
@@ -389,7 +389,7 @@ def delete_customer(customer_id):
 @limiter.limit("10 per hour", key_func=rate_limit_key)
 def reset_customer_password(customer_id):
     """Reset customer password"""
-    customer = Customer.query.get(customer_id)
+    customer = db.session.get(Customer, customer_id)
 
     if not customer:
         return jsonify({
@@ -440,7 +440,7 @@ def impersonate_customer(customer_id):
     """Generate impersonation token for customer"""
     from flask_jwt_extended import create_access_token
 
-    customer = Customer.query.get(customer_id)
+    customer = db.session.get(Customer, customer_id)
 
     if not customer:
         return jsonify({

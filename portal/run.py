@@ -80,7 +80,7 @@ def seed_db():
     ]
     
     for plan_data in plans:
-        existing = Plan.query.filter_by(name=plan_data['name']).first()
+        existing = db.session.query(Plan).filter_by(name=plan_data['name']).first()
         if not existing:
             plan = Plan(**plan_data)
             db.session.add(plan)
@@ -88,7 +88,7 @@ def seed_db():
     
     # Create demo customer if it doesn't exist
     demo_email = "demo@example.com"
-    existing_customer = Customer.query.filter_by(email=demo_email).first()
+    existing_customer = db.session.query(Customer).filter_by(email=demo_email).first()
     
     if not existing_customer:
         demo_customer = Customer(

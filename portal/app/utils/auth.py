@@ -9,6 +9,7 @@ import sys
 from functools import wraps
 from flask import jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
+from portal.app import db
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
@@ -38,12 +39,12 @@ def require_customer(f):
                 return jsonify({'error': 'Invalid token: missing customer ID'}), 401
             
             # Verify customer exists and is active
-            customer = Customer.query.get(customer_id)
+            customer = db.session.get(Customer, customer_id)
             if not customer:
                 return jsonify({'error': 'Customer not found'}), 401
             
-            if customer.status != 'active':
-                return jsonify({'error': f'Customer account is {customer.status}'}), 403
+            if not customer.is_active:
+                return jsonify({'error': 'Customer account is inactive'}), 403
             
             # Continue to the original function
             return f(*args, **kwargs)
@@ -66,7 +67,7 @@ def get_current_customer():
         if not customer_id:
             return None
         
-        customer = Customer.query.get(customer_id)
+        customer = db.session.get(Customer, customer_id)
         return customer if customer and customer.status == 'active' else None
         
     except Exception:
@@ -86,7 +87,7 @@ def customer_owns_tenant(customer_id, tenant_id):
     try:
         from shared.models import Tenant
         
-        tenant = Tenant.query.filter_by(
+        tenant = db.session.query(Tenant).filter_by(
             id=tenant_id,
             customer_id=customer_id
         ).first()
@@ -191,7 +192,7 @@ def validate_api_key(api_key, customer_id):
         bool: True if API key is valid
     """
     try:
-        customer = Customer.query.get(customer_id)
+        customer = db.session.get(Customer, customer_id)
         if not customer or customer.status != 'active':
             return False
         

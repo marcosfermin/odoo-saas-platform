@@ -62,7 +62,7 @@ def register():
         }), 400
 
     # Check if customer already exists
-    existing_customer = Customer.query.filter_by(email=data['email'].lower()).first()
+    existing_customer = db.session.query(Customer).filter_by(email=data['email'].lower()).first()
     if existing_customer:
         return jsonify({
             'error': 'Customer Exists',
@@ -132,7 +132,7 @@ def login():
         }), 400
 
     # Find customer by email
-    customer = Customer.query.filter_by(email=data['email'].lower()).first()
+    customer = db.session.query(Customer).filter_by(email=data['email'].lower()).first()
 
     if not customer or not customer.check_password(data['password']):
         current_app.logger.warning(f"Failed login attempt: {data['email']}")
@@ -264,7 +264,7 @@ def verify_email():
         }), 400
 
     # Find customer by email
-    customer = Customer.query.filter_by(email=email.lower()).first()
+    customer = db.session.query(Customer).filter_by(email=email.lower()).first()
 
     if not customer:
         return jsonify({
@@ -378,7 +378,7 @@ def forgot_password():
         }), 400
 
     # Always return success to prevent email enumeration
-    customer = Customer.query.filter_by(email=email.lower()).first()
+    customer = db.session.query(Customer).filter_by(email=email.lower()).first()
 
     if customer and customer.is_active:
         # Generate password reset token (valid for 1 hour)
@@ -443,7 +443,7 @@ def reset_password():
         }), 400
 
     # Find customer
-    customer = Customer.query.filter_by(email=email.lower()).first()
+    customer = db.session.query(Customer).filter_by(email=email.lower()).first()
 
     if not customer:
         return jsonify({
